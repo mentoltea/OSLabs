@@ -43,10 +43,10 @@ const char EntryCodes[] = "--dlcbps";
 const char Permissions[] = "rwx";
 
 bool list_directory(const char* path, int flags);
-bool print_entry(const char* base_path, const struct dirent* entry, int flags);
+bool print_entry(const char* base_path, const char* entry, int flags);
 
 // allocates memory
-char* construct_full_path(const char* base_path, const struct dirent* entry);
+char* concat_strings(const char* base_path, const char* entry);
 
 void set_color(int colorcode);
 void set_color_bold(int colorcode);
@@ -149,24 +149,24 @@ char* get_link_target(const char* link_path) {
 }
 
 // allocates memory
-char* construct_full_path(const char* base_path, const struct dirent* entry) {
-    size_t base_len = strlen(base_path);
-    size_t entry_len = strlen(entry->d_name);
-    char* res = malloc(base_len + entry_len + 1);
-    memcpy(res, base_path, base_len);
-    memcpy(res + base_len, entry->d_name, entry_len);
-    res[base_len + entry_len] = '\0';
+char* concat_strings(const char* s1, const char* s2) {
+    size_t s1_len = strlen(s1);
+    size_t s2_len = strlen(s2);
+    char* res = malloc(s1_len + s2_len + 1);
+    memcpy(res, s1, s1_len);
+    memcpy(res + s1_len, s2, s2_len);
+    res[s1_len + s2_len] = '\0';
     return res;
 }
 
-bool print_entry(const char* base_path, const struct dirent* entry, int flags) {    
+bool print_entry(const char* base_path, const char* entry_name, int flags) {    
     bool result = false;
     char *full_path = NULL;
 
     char *link_full_path = NULL;
     
 
-    full_path = construct_full_path(base_path, entry);
+    full_path = concat_strings(base_path, entry_name);
     
     struct stat info, link_info;
     if (lstat(full_path, &info) != 0) {
@@ -200,7 +200,7 @@ bool print_entry(const char* base_path, const struct dirent* entry, int flags) {
     memcpy(cut_time, time_str+4, 12);
     cut_time[12] = '\0';
     
-    bool name_has_spaces = (bool) strchr(entry->d_name, ' ');
+    bool name_has_spaces = (bool) strchr(entry_name, ' ');
 
     EntryType type = ENTRY_UNDEFINED;
     
@@ -320,8 +320,8 @@ bool print_entry(const char* base_path, const struct dirent* entry, int flags) {
         if (bold_text) set_color_bold(color_code);
         else set_color(color_code);
         
-        if (name_has_spaces) printf("`%s`", entry->d_name);
-        else printf("%s", entry->d_name);
+        if (name_has_spaces) printf("`%s`", entry_name);
+        else printf("%s", entry_name);
         
         reset_color();
         
@@ -345,8 +345,8 @@ bool print_entry(const char* base_path, const struct dirent* entry, int flags) {
         if (bold_text) set_color_bold(color_code);
         else set_color(color_code);
         
-        if (name_has_spaces) printf("`%s`", entry->d_name);
-        else printf("%s", entry->d_name);
+        if (name_has_spaces) printf("`%s`", entry_name);
+        else printf("%s", entry_name);
         
         reset_color();
 
@@ -362,9 +362,14 @@ DEFER:
     return result;
 }
 
+int compare_strings(const void *p1, const void *p2) {
+    return strcmp( *(const char**) p1, *(const char**) p2);
+}
+
 bool list_directory(const char* path, int flags) {
     bool result = false;
     DIR* dir = NULL;
+    char **entry_names = NULL;
 
     size_t entry_count = 0;
     struct dirent* entry;
@@ -374,19 +379,39 @@ bool list_directory(const char* path, int flags) {
         fprintf(stderr, "Cannot open directory %s\n", path);
         goto DEFER;
     }
-
+    
     for (entry = readdir(dir); entry != NULL; entry = readdir(dir)) { 
         if (entry->d_name[0]=='.' && !(flags & FLAG_ALL)) continue;
         entry_count++;
     }
-    
     rewinddir(dir);
+    
+    if (entry_count == 0) {
+        printf("Directory is empty\n");
+        result = true;
+        goto DEFER;
+    }
 
-    if (flags & FLAG_LONG) printf("Total %lu\n", entry_count);
+    entry_names = malloc(entry_count * sizeof(char*));
+    if (!entry_names) {
+        fprintf(stderr, "Cannot allocate %ld bytes\n", entry_count * sizeof(char*));
+        goto DEFER;
+    }
 
-    for (entry = readdir(dir); entry != NULL; entry = readdir(dir)) {
+    size_t i=0;
+    for (entry = readdir(dir); entry != NULL; entry = readdir(dir)) { 
         if (entry->d_name[0]=='.' && !(flags & FLAG_ALL)) continue;
-        if (!print_entry(path, entry, flags)) {
+        entry_names[i] = strdup(entry->d_name);
+        i++;
+    }
+
+    qsort(entry_names, entry_count, sizeof(char*), compare_strings);
+    
+    if (flags & FLAG_LONG) printf("Total %lu\n", entry_count);
+    for (i=0; i<entry_count; i++) {
+        if (entry_names[i][0]=='.' && !(flags & FLAG_ALL)) continue;
+        
+        if (!print_entry(path, entry_names[i], flags)) {
             goto DEFER;
         }
     }
@@ -396,5 +421,11 @@ bool list_directory(const char* path, int flags) {
     result = true;
 DEFER:
     if (dir) closedir(dir);
+    if (entry_names) {
+        for (size_t i=0; i<entry_count; i++) {
+            free(entry_names[i]);
+        }
+        free(entry_names);
+    }
     return result;
 }
