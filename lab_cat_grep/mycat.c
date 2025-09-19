@@ -67,7 +67,7 @@ bool read_file_and_print(Context *ctx, const char* filepath, size_t buffer_size)
                 printf("%s", buffer);
             }
         }
-        if (ctx->flags.E && (!ctx->flags.b || non_empty_line)) printf("$");
+        if (ctx->flags.E) printf("$");
         printf("\n");
 
 
