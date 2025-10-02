@@ -308,10 +308,10 @@ bool print_entry(const char* base_path, const char* entry_name, int flags) {
         
         printf("%3lu ", info.st_nlink);
 
-        if (pwd_file) printf("%5s ", pwd_file->pw_name ? pwd_file->pw_name : "?"); 
+        if (pwd_file && pwd_file->pw_name) printf("%5s ", pwd_file->pw_name); 
         else printf("%5d ", info.st_uid);
         
-        if (grp_file) printf("%5s ", grp_file->pw_name ? grp_file->pw_name : "?"); 
+        if (grp_file && grp_file->pw_name) printf("%5s ", grp_file->pw_name); 
         else printf("%5d ", info.st_uid);
 
         printf("%6lu", info.st_size);
