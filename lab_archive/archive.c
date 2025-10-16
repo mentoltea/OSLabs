@@ -1,0 +1,275 @@
+#include "archive.h"
+
+void free_element(ElementInfo* elem) {
+    if (elem->name) free(elem->name);
+    if (elem->type == ELEM_DIR) {
+        if (elem->content.dir.child) {
+            free_element_list(elem->content.dir.child);
+        }
+    } else {
+        if (elem->content.file.source == SOURCE_DRIVE) {
+            if (elem->content.file.descriptor.drive.filepath) {
+                free(elem->content.file.descriptor.drive.filepath); 
+            }
+        }
+    }
+    free(elem);
+}
+
+void free_element_list(ElementInfo* elem) {
+    ElementInfo *ptr = elem;
+    ElementInfo *next = ptr->next;
+    while (ptr != NULL) {
+        next = ptr->next;
+        free_element(ptr);
+        ptr = next;
+    }
+}
+
+void archive_free(Archive *arc) {
+    if (arc->arcpath) {
+        free(arc->arcpath);
+        arc->arcpath = NULL;
+    }
+    if (arc->element) {
+        free_element_list(arc->element);
+        arc->element = NULL;
+        arc->element_count = 0;
+    }
+    if (arc->fd) {
+        close(arc->fd);
+        arc->fd = 0;
+    }
+}
+
+uint64_t element_get_content_size(ElementInfo *elem) {
+    uint64_t size = 0;
+    if (elem->type == ELEM_FILE) {
+        switch (elem->content.file.source) {
+            case SOURCE_DRIVE: { 
+                struct FileDriveContentDescriptor *cd = &elem->content.file.descriptor.drive;
+                
+                if (!cd->fd) {
+                    cd->fd = open(cd->filepath, O_RDONLY);
+                    if (cd->fd == -1) {
+                        fprintf(stderr, "Cannot open file %s : %s\n", cd->filepath, strerror(errno));
+                    }
+                }
+                
+                if (cd->fd == -1) {
+                    fprintf(stderr, "Assuming %s has 0 size\n", cd->filepath);
+                    break;
+                }
+                
+                size = lseek(cd->fd, 0, SEEK_END);
+            } break;
+            case SOURCE_ARCHIVE: { size = elem->content.file.descriptor.archive.size; } break;
+            case SOURCE_MEMORY: { size = elem->content.file.descriptor.memory.size; } break;
+        }
+    } else {
+        ElementInfo *ptr;
+        for (ptr = elem->content.dir.child; ptr != NULL; ptr = ptr->next) {
+            size += element_get_content_size(ptr);
+        }
+    }
+    return size;
+}
+
+int64_t element_write_content_to_fd(int fd, Archive *arc, ElementInfo *elem) {
+    if (elem->type == ELEM_DIR) {
+        fprintf(stderr, "Cannot write element of type DIR directly to fd\n");
+        return -1;
+    }
+    
+    int64_t written = 0;
+    switch (elem->content.file.source) {
+        case SOURCE_DRIVE: {
+            struct FileDriveContentDescriptor *cd = &elem->content.file.descriptor.drive;
+            if (!cd->fd) {
+                cd->fd = open(cd->filepath, O_RDONLY);
+                if (cd->fd == -1) {
+                    fprintf(stderr, "Cannot open file %s : %s\n", cd->filepath, strerror(errno));
+                }
+            }
+            
+            if (cd->fd == -1) {
+                fprintf(stderr, "Assuming %s has 0 size. Nothing written.\n", cd->filepath);
+                break;
+            }
+            
+            uint64_t size = lseek(cd->fd, 0, SEEK_END);
+            
+            written = write_fd_to_fd(fd, cd->fd, 0, size);
+        } break;
+        case SOURCE_ARCHIVE: {
+            struct FileArchiveContentDescriptor *ad = &elem->content.file.descriptor.archive;
+            if (!arc->fd || arc->fd==-1) {
+                fprintf(stderr, "Fatal: dont have access to archive file %s\n", arc->arcpath);
+                written = -1;
+                break;
+            }
+
+            written = write_fd_to_fd(fd, arc->fd, ad->content_offset, ad->size);
+        } break;
+        case SOURCE_MEMORY: {
+            struct FileMemoryContentDescriptor *memory = &elem->content.file.descriptor.memory;
+            written = write(fd, memory->ptr, memory->size);
+        } break;
+
+        default: {
+            fprintf(stderr, "Unexpected source type: %d\n", elem->content.file.source);
+            return -1;
+        } break;
+    }
+
+    return written;
+}
+
+
+#define BUFFER_SIZE 4096
+static uint8_t buffer[BUFFER_SIZE];
+int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size) {
+    lseek(fdfrom, offset_from, SEEK_SET);
+    uint64_t written = 0;
+    while (written < size) {
+        uint64_t current_read = size - written > BUFFER_SIZE ? BUFFER_SIZE : size - written;
+        
+        if (read(fdfrom, buffer, current_read) == -1) return -1;
+
+        if (write(fdto, buffer, current_read) == -1) return -1;
+
+        written += current_read;
+    }
+    return (int64_t) written;
+}
+
+
+ElementInfo *archive_get(Archive *arc, const char *archive_path) {
+    ElementInfo *result = NULL;
+
+    char* path = strdup(archive_path);
+    size_t length = strlen(path);
+    while (path[length-1] == '/') {
+        path[length-1] = '\0';
+        length--;
+        if (length == 0) {
+            fprintf(stderr, "Cannot resolve path %s\n", archive_path);
+            goto DEFER;
+        }
+    }
+    
+    char* cur_path = path;
+
+    char* top_name = NULL;
+    ElementInfo *root = arc->element;
+    ElementInfo *ptr = NULL;
+
+    while (1) {
+        char* delimitor = strchr(cur_path, '/');
+        if (delimitor == NULL) {
+            top_name = cur_path;
+            cur_path = NULL;
+        }
+        else {
+            *delimitor = '\0';
+            top_name = cur_path;
+            cur_path = delimitor + 1;
+        }
+        
+        for (ptr = root; ptr != NULL; ptr = ptr->next) {
+            if (strcmp(ptr->name, top_name) == 0) {
+                if (cur_path == NULL) {
+                    result = ptr;
+                    goto DEFER;
+                }
+                root = ptr;
+                break;
+            }
+        }
+
+        if (ptr == NULL) {
+            fprintf(stderr, "No element named `%s` found\n", top_name);
+            goto DEFER;
+        }
+    } 
+
+DEFER:
+    if (path) free(path);
+    return result;
+}
+
+void archive_delete(Archive *arc, const char *archive_path) {
+    ElementInfo* element = archive_get(arc, archive_path);
+    if (element == NULL) return;
+
+    ElementInfo *prev = element->prev;
+    ElementInfo *next = element->next;
+    ElementInfo *parent = element->parent;
+
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (parent && parent->content.dir.child == element) {
+        parent->content.dir.child = next;
+        parent->content.dir.children_count--;
+    }
+    if (arc->element == element) {
+        arc->element = next;
+    }
+    arc->element_count--;
+    arc->was_changed = true;
+
+    free_element(element);
+}
+
+bool archive_add(Archive *arc, ElementInfo *dir, ElementInfo *new) {
+    ElementInfo **root;
+    ElementInfo *parent;
+    
+    if (dir == NULL) {
+        root = &arc->element;
+        parent = NULL;
+    }
+    else {
+        if (dir->type != ELEM_DIR) {
+            fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", dir->name);
+            return false;
+        }
+        root = &dir->content.dir.child;
+        parent = dir;
+    }
+
+    new->parent = parent;
+    if (parent) parent->content.dir.children_count++;
+    
+    ElementInfo **ptr = root;
+    while (*ptr != NULL) {
+        if (strcmp((*ptr)->name, new->name) == 0) {
+            fprintf(stderr, "Element %s alredy exists in %s\n", new->name, dir ? dir->name : "/");
+            return false;
+        }
+        ptr = &(*ptr)->next;
+    }
+    *ptr = new;
+
+    arc->element_count++;
+    arc->was_changed = true;
+
+    return true;
+}
+
+void archive_flush(Archive *arc) {
+    archive_save(arc);
+}
+
+bool archive_new(Archive *arc, const char* arcpath) {
+    arc->arcpath = strdup(arcpath);
+    arc->fd = open(arc->arcpath, O_RDWR | O_CREAT | O_EXCL);
+    if (arc->fd == -1) {
+        fprintf(stderr, "Cannot create new archive %s : %s\n", arcpath, strerror(errno));
+        return false;
+    }
+    arc->element = NULL;
+    arc->element_count = 0;
+    arc->was_changed = true;
+    return true;
+}

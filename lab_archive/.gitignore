@@ -1,0 +1,10 @@
+*
+!.gitignore
+!Makefile
+!version.h
+!archive.c
+!archive.h
+!cli.c
+!functionality.h
+!loadsave.h
+!loadsave.c

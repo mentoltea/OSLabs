@@ -1,0 +1,146 @@
+#ifndef ARCHIVE_H
+#define ARCHIVE_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <limits.h>
+#include <string.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <error.h>
+#include <errno.h>
+
+#include "version.h"
+
+struct Archive;
+typedef struct Archive Archive;
+
+struct ElementInfo;
+typedef struct ElementInfo ElementInfo;
+
+union ElementContent;
+typedef union ElementContent ElementContent;
+
+struct ElementAttributes;
+typedef struct ElementAttributes ElementAttributes;
+
+struct FileInfo;
+typedef struct FileInfo FileInfo;
+
+struct DirInfo;
+typedef struct DirInfo DirInfo;
+
+struct Archive {
+    char* arcpath;
+    int fd;
+
+    ElementInfo *element;
+    
+    uint64_t element_count;
+
+    bool was_changed;
+};
+typedef struct Archive Archive;
+
+
+enum FileSource {
+    SOURCE_DRIVE = 0,
+    SOURCE_ARCHIVE,
+    SOURCE_MEMORY,
+};
+
+struct FileDriveContentDescriptor {
+    char* filepath;
+    int fd;
+};
+
+struct FileArchiveContentDescriptor {
+    int64_t header_offset;
+    int64_t content_offset;
+    uint64_t size;
+};
+
+struct FileMemoryContentDescriptor {
+    void* ptr;
+    uint64_t size;
+};
+
+union FileContentDescriptor {
+    struct FileDriveContentDescriptor   drive;
+    struct FileArchiveContentDescriptor archive;
+    struct FileMemoryContentDescriptor  memory;
+};
+
+
+struct FileInfo {    
+    enum FileSource source;
+    union FileContentDescriptor descriptor;
+};
+
+struct DirInfo {
+    struct ElementInfo *child; // poiter to first child. NOT A DYNAMIC ARRAY!
+    uint64_t children_count;
+};
+
+typedef enum {
+    ELEM_FILE = 0,
+    ELEM_DIR,
+} ElementType;
+
+struct ElementAttributes {
+    mode_t st_mode;
+    uid_t  st_uid;
+    gid_t  st_gid;
+};
+
+union ElementContent {
+    struct FileInfo file;
+    struct DirInfo  dir;
+};
+
+struct ElementInfo {
+    struct ElementInfo *next;
+    struct ElementInfo *prev;
+    struct ElementInfo *parent;
+
+    char* name;
+
+    ElementType type;
+    ElementAttributes attributes;
+    ElementContent content;
+};
+
+void archive_free(Archive *arc);
+
+void archive_flush(Archive *arc);
+
+bool archive_add(Archive *arc, ElementInfo *dir, ElementInfo *new);
+
+void archive_delete(Archive *arc, const char *archive_path);
+
+ElementInfo *archive_get(Archive *arc, const char *archive_path);
+
+bool archive_load(Archive *arc, const char* arcpath);
+bool archive_save(Archive *arc);
+bool archive_save_as(Archive *arc, const char* arcpath);
+bool archive_new(Archive *arc, const char* arcpath);
+
+uint64_t element_get_content_size(ElementInfo *elem);
+
+// makes sense only for files
+// returns number of bytes written
+// -1 on error
+int64_t element_write_content_to_fd(int fd, Archive *arc, ElementInfo *elem);
+
+int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size);
+
+void free_element(ElementInfo* elem);
+void free_element_list(ElementInfo* elem);
+
+#endif // ARCHIVE_H
