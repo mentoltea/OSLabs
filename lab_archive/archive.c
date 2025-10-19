@@ -127,16 +127,16 @@ int64_t element_write_content_to_fd(int fd, Archive *arc, ElementInfo *elem) {
 
 
 #define BUFFER_SIZE 4096
-static uint8_t buffer[BUFFER_SIZE];
+static uint8_t READ_WRITE_BUFFER[BUFFER_SIZE];
 int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size) {
     lseek(fdfrom, offset_from, SEEK_SET);
     uint64_t written = 0;
     while (written < size) {
         uint64_t current_read = size - written > BUFFER_SIZE ? BUFFER_SIZE : size - written;
         
-        if (read(fdfrom, buffer, current_read) == -1) return -1;
+        if (read(fdfrom, READ_WRITE_BUFFER, current_read) == -1) return -1;
 
-        if (write(fdto, buffer, current_read) == -1) return -1;
+        if (write(fdto, READ_WRITE_BUFFER, current_read) == -1) return -1;
 
         written += current_read;
     }
@@ -147,8 +147,18 @@ int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size)
 ElementInfo *archive_get(Archive *arc, const char *archive_path) {
     ElementInfo *result = NULL;
 
-    char* path = strdup(archive_path);
+    char* buff = strdup(archive_path);
+    char *path = buff;
     size_t length = strlen(path);
+    
+    while (path[0] == '/') {
+        path = path+1;
+        length--;
+        if (length == 0) {
+            fprintf(stderr, "Cannot resolve path %s\n", archive_path);
+            goto DEFER;
+        }
+    }
     while (path[length-1] == '/') {
         path[length-1] = '\0';
         length--;
@@ -194,7 +204,7 @@ ElementInfo *archive_get(Archive *arc, const char *archive_path) {
     } 
 
 DEFER:
-    if (path) free(path);
+    if (buff) free(buff);
     return result;
 }
 
@@ -208,8 +218,8 @@ void archive_delete(Archive *arc, const char *archive_path) {
 
     if (prev) prev->next = next;
     if (next) next->prev = prev;
-    if (parent && parent->content.dir.child == element) {
-        parent->content.dir.child = next;
+    if (parent) {
+        if (parent->content.dir.child == element) parent->content.dir.child = next;
         parent->content.dir.children_count--;
     }
     if (arc->element == element) {
