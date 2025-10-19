@@ -24,7 +24,7 @@ void free_element_content(ElementInfo* elem) {
                 free(elem->content.file.descriptor.drive.filepath); 
             }
             if (elem->content.file.descriptor.drive.fd != 0 && elem->content.file.descriptor.drive.fd != -1) {
-                clsoe(elem->content.file.descriptor.drive.fd);
+                close(elem->content.file.descriptor.drive.fd);
             }
         } break;
 
@@ -264,7 +264,7 @@ bool archive_add(Archive *arc, ElementInfo *root, ElementInfo *new) {
     }
     else {
         if (root->type != ELEM_DIR) {
-            fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", dir->name);
+            fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", root->name);
             return false;
         }
         first = &root->content.dir.child;
@@ -361,11 +361,11 @@ ElementInfo *element_new_file_from_memory(const char* name, ElementAttributes at
 
 ElementInfo *element_add_child(ElementInfo *root, ElementInfo *new) {
     if (root->type != ELEM_DIR) {
-        fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", dir->name);
+        fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", root->name);
         return NULL;
     }
     new->parent = root;
-    ElementInfo **first = root->content.dir.child;
+    ElementInfo **first = &root->content.dir.child;
 
     ElementInfo **ptr = first;
     while (*ptr != NULL) {
