@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <string.h>
+#include <assert.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -95,8 +96,8 @@ typedef enum {
 
 struct ElementAttributes {
     mode_t st_mode;
-    uid_t  st_uid;
-    gid_t  st_gid;
+    uid_t  st_uid; // NOTE: needed??? no sense to save file with that thing
+    gid_t  st_gid; // NOTE: needed??? no sense to save file with that thing
 };
 
 union ElementContent {
@@ -116,31 +117,46 @@ struct ElementInfo {
     ElementContent content;
 };
 
+
+bool archive_new(Archive *arc, const char* arcpath);
 void archive_free(Archive *arc);
 
-void archive_flush(Archive *arc);
-
-bool archive_add(Archive *arc, ElementInfo *dir, ElementInfo *new);
-
+bool archive_add(Archive *arc, ElementInfo *root, ElementInfo *new);
+bool archive_replace(Archive *arc, ElementInfo *old, ElementInfo *new);
 void archive_delete(Archive *arc, const char *archive_path);
-
+void archive_delete_element(Archive *arc, ElementInfo *elem);
 ElementInfo *archive_get(Archive *arc, const char *archive_path);
 
 bool archive_load(Archive *arc, const char* arcpath);
+void archive_flush(Archive *arc);
 bool archive_save(Archive *arc);
 bool archive_save_as(Archive *arc, const char* arcpath);
-bool archive_new(Archive *arc, const char* arcpath);
 
 uint64_t element_get_content_size(ElementInfo *elem);
-
 // makes sense only for files
 // returns number of bytes written
 // -1 on error
 int64_t element_write_content_to_fd(int fd, Archive *arc, ElementInfo *elem);
 
-int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size);
+ElementInfo *element_new_directory(const char* name, ElementAttributes attributes);
+ElementInfo *element_new_file_from_fs(const char* name, ElementAttributes attributes, const char* filepath);
+// does copy memory
+ElementInfo *element_new_file_from_memory(const char* name, ElementAttributes attributes, void* ptr, uint64_t size);
+
+ElementInfo *element_add_child(ElementInfo *root, ElementInfo *new);
+bool element_swap_content(ElementInfo *old, ElementInfo *new);
+
+// NULL if unique
+// Otherwise pointer to element with that name
+ElementInfo *element_check_name_unique(Archive *arc, ElementInfo* root, const char* name);
+ElementInfo *element_get_last_child(Archive *arc, ElementInfo* root);
 
 void free_element(ElementInfo* elem);
+void free_element_content(ElementInfo* elem);
 void free_element_list(ElementInfo* elem);
+
+int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size);
+
+ElementAttributes standart_attributes();
 
 #endif // ARCHIVE_H

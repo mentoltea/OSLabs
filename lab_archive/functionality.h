@@ -2,7 +2,6 @@
 #define FUNCTIONALITY_H
 
 #include "archive.h"
-#include <stdbool.h>
 
 bool func_add_file_to_archive(Archive *arc, const char* filepath, int flags);
 bool func_add_dir_to_archive(Archive *arc, const char* filepath, int flags);

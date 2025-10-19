@@ -2,18 +2,41 @@
 
 void free_element(ElementInfo* elem) {
     if (elem->name) free(elem->name);
+    free_element_content(elem);
+    free(elem);
+}
+
+void free_element_content(ElementInfo* elem) {
     if (elem->type == ELEM_DIR) {
         if (elem->content.dir.child) {
             free_element_list(elem->content.dir.child);
         }
-    } else {
-        if (elem->content.file.source == SOURCE_DRIVE) {
+        return;
+    }
+    
+    assert(elem->type == ELEM_FILE);
+
+    switch (elem->content.file.source) {
+        case SOURCE_ARCHIVE: break;
+
+        case SOURCE_DRIVE: {
             if (elem->content.file.descriptor.drive.filepath) {
                 free(elem->content.file.descriptor.drive.filepath); 
             }
-        }
+            if (elem->content.file.descriptor.drive.fd != 0 && elem->content.file.descriptor.drive.fd != -1) {
+                clsoe(elem->content.file.descriptor.drive.fd);
+            }
+        } break;
+
+        case SOURCE_MEMORY: {
+            if (elem->content.file.descriptor.memory.ptr) free(elem->content.file.descriptor.memory.ptr);
+        } break;    
+
+        default: {
+            fprintf(stderr, "Unknown source type: %d\n", elem->content.file.source);
+            exit(2);
+        } break;
     }
-    free(elem);
 }
 
 void free_element_list(ElementInfo* elem) {
@@ -231,39 +254,58 @@ void archive_delete(Archive *arc, const char *archive_path) {
     free_element(element);
 }
 
-bool archive_add(Archive *arc, ElementInfo *dir, ElementInfo *new) {
-    ElementInfo **root;
+bool archive_add(Archive *arc, ElementInfo *root, ElementInfo *new) {
+    ElementInfo **first;
     ElementInfo *parent;
     
-    if (dir == NULL) {
-        root = &arc->element;
+    if (root == NULL) {
+        first = &arc->element;
         parent = NULL;
     }
     else {
-        if (dir->type != ELEM_DIR) {
+        if (root->type != ELEM_DIR) {
             fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", dir->name);
             return false;
         }
-        root = &dir->content.dir.child;
-        parent = dir;
+        first = &root->content.dir.child;
+        parent = root;
     }
-
     new->parent = parent;
-    if (parent) parent->content.dir.children_count++;
     
-    ElementInfo **ptr = root;
+    ElementInfo **ptr = first;
     while (*ptr != NULL) {
         if (strcmp((*ptr)->name, new->name) == 0) {
-            fprintf(stderr, "Element %s alredy exists in %s\n", new->name, dir ? dir->name : "/");
+            fprintf(stderr, "Element %s alredy exists in %s\n", new->name, root ? root->name : "/");
             return false;
         }
         ptr = &(*ptr)->next;
     }
     *ptr = new;
-
+    
+    if (root) root->content.dir.children_count++;
     arc->element_count++;
     arc->was_changed = true;
+    
+    return true;
+}
 
+bool archive_replace(Archive *arc, ElementInfo *old, ElementInfo *new) {
+    if (strcmp(old->name, new->name)!=0) {
+        fprintf(stderr, "Cannot replace elements with different names: `%s` (old) and `%s` (new)\n", old->name, new->name);
+        return false;
+    }
+    new->prev = old->prev;
+    new->next = old->next;
+    new->parent = old->next;
+
+    if (new->prev) new->prev->next = new;
+    if (new->next) new->next->prev = new;
+    if (new->parent) {
+        if (new->parent->content.dir.child == old) new->parent->content.dir.child = new;
+    }
+    if (arc->element == old) arc->element = new;
+
+    free_element(old);
     return true;
 }
 
@@ -281,5 +323,77 @@ bool archive_new(Archive *arc, const char* arcpath) {
     arc->element = NULL;
     arc->element_count = 0;
     arc->was_changed = true;
+    return true;
+}
+
+ElementInfo *element_new_directory(const char* name, ElementAttributes attributes) {
+    ElementInfo *elem = NULL;
+    elem = calloc(1, sizeof(ElementInfo));
+    elem->name = strdup(name);
+    elem->type = ELEM_DIR;
+    elem->attributes = attributes;
+    return elem;
+}
+
+ElementInfo *element_new_file_from_fs(const char* name, ElementAttributes attributes, const char* filepath) {
+    ElementInfo *elem = NULL;
+    elem = calloc(1, sizeof(ElementInfo));
+    elem->name = strdup(name);
+    elem->type = ELEM_FILE;
+    elem->attributes = attributes;
+    elem->content.file.source = SOURCE_DRIVE;
+    elem->content.file.descriptor.drive.filepath = strdup(filepath);
+    return elem;
+}
+
+ElementInfo *element_new_file_from_memory(const char* name, ElementAttributes attributes, void* ptr, uint64_t size) {
+    ElementInfo *elem = NULL;
+    elem = calloc(1, sizeof(ElementInfo));
+    elem->name = strdup(name);
+    elem->type = ELEM_FILE;
+    elem->attributes = attributes;
+    elem->content.file.source = SOURCE_MEMORY;
+    elem->content.file.descriptor.memory.ptr = malloc(size);
+    memcpy(elem->content.file.descriptor.memory.ptr, ptr, size);
+    elem->content.file.descriptor.memory.size = size;
+    return elem;
+}
+
+ElementInfo *element_add_child(ElementInfo *root, ElementInfo *new) {
+    if (root->type != ELEM_DIR) {
+        fprintf(stderr, "Can add elements only to DIR. %s is not a dir.", dir->name);
+        return NULL;
+    }
+    new->parent = root;
+    ElementInfo **first = root->content.dir.child;
+
+    ElementInfo **ptr = first;
+    while (*ptr != NULL) {
+        if (strcmp((*ptr)->name, new->name) == 0) {
+            fprintf(stderr, "Element %s alredy exists in %s\n", new->name, root->name);
+            return NULL;
+        }
+        ptr = &(*ptr)->next;
+    }
+    *ptr = new;
+
+    root->content.dir.children_count++;
+
+    return new;
+}
+
+bool element_swap_content(ElementInfo *old, ElementInfo *new) {
+    ElementType oldtype = old->type;
+    ElementAttributes oldattr = old->attributes;
+    ElementContent oldcontent = old->content;
+
+    old->type = new->type;
+    old->attributes = new->attributes;
+    old->content = new->content;
+    
+    new->type = oldtype;
+    new->attributes = oldattr;
+    new->content = oldcontent;
+    
     return true;
 }
