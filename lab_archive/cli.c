@@ -14,9 +14,25 @@ void print_archive(Archive *arc, ElementInfo* root, int tabs) {
     }
 
     ElementInfo *ptr;
+    static char prefixes[] = {'\0', 'K', 'M', 'G', 'T'};
     for (ptr = first; ptr != NULL; ptr = ptr->next) {
         for (int t=0; t<tabs; t++) printf("\t");
-        printf("%c %s %lu\n", types[ptr->type], ptr->name, element_get_content_size(ptr) );
+
+        uint64_t size = element_get_content_size(ptr);
+        double dsize = size;
+        uint8_t prefix_index = 0;
+        int after_dot_count = 2;
+
+        while (dsize > 1024 && prefix_index < sizeof(prefixes)) {
+            dsize = dsize / 1024;
+            prefix_index++;
+        }
+
+        if (dsize - (int)dsize == 0.f) {
+            after_dot_count = 0;
+        }
+
+        printf("%c %s %.*f %cB\n", types[ptr->type], ptr->name, after_dot_count, dsize, prefixes[prefix_index] );
         if (ptr->type == ELEM_DIR) print_archive(arc, ptr, tabs+1);
     }
 }
@@ -32,22 +48,21 @@ int main() {
     }
     print_archive(&arc, NULL, 0);
     
-    ElementInfo *dir = archive_get(&arc, "src");
-    if (dir == NULL) {
-        return 1;
-    }
 
-    ElementInfo *element = calloc(1, sizeof(ElementInfo));
-    element->name = strdup("File.cpp");
-    element->type = ELEM_FILE;
-    element->content.file.source = SOURCE_DRIVE;
-    element->content.file.descriptor.drive.filepath = strdup("./cli.c");
-    archive_add(&arc, dir, element);
-    
-    // ElementInfo *element = calloc(1, sizeof(ElementInfo));
-    // element->name = strdup("src");
-    // element->type = ELEM_DIR;
-    // archive_add(&arc, NULL, element);
+    ElementInfo *file = archive_get(&arc, "src/File.c");
+    if (file) {
+        ElementAttributes attr = {0};
+        ElementInfo *newfile = element_new_file_from_fs("file.c", attr, "./Makefile");
+
+        element_swap_content(file, newfile);
+        
+        if (strcmp(file->name, "Makefile") != 0) {
+            free(file->name);
+            file->name = strdup("Makefile");
+        }
+
+        free_element(newfile);
+    }
     
     printf("----------------\n");
     print_archive(&arc, NULL, 0);

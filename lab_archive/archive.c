@@ -192,9 +192,10 @@ ElementInfo *archive_get(Archive *arc, const char *archive_path) {
     }
     
     char* cur_path = path;
-
+    char* prev_path = NULL;
     char* top_name = NULL;
-    ElementInfo *root = arc->element;
+
+    ElementInfo *first_in_root = arc->element;
     ElementInfo *ptr = NULL;
 
     while (1) {
@@ -206,22 +207,33 @@ ElementInfo *archive_get(Archive *arc, const char *archive_path) {
         else {
             *delimitor = '\0';
             top_name = cur_path;
+            prev_path = cur_path;
             cur_path = delimitor + 1;
         }
         
-        for (ptr = root; ptr != NULL; ptr = ptr->next) {
+        bool found = false;
+        for (ptr = first_in_root; ptr != NULL; ptr = ptr->next) {
             if (strcmp(ptr->name, top_name) == 0) {
                 if (cur_path == NULL) {
                     result = ptr;
                     goto DEFER;
                 }
-                root = ptr;
+                
+                if (ptr->type != ELEM_DIR) {
+                    fprintf(stderr, "Element `%s` is not a dir and cannot have children\n", top_name);
+                    goto DEFER;
+                }
+                
+                found = true;
+                first_in_root = ptr->content.dir.child;
                 break;
             }
         }
 
-        if (ptr == NULL) {
-            fprintf(stderr, "No element named `%s` found\n", top_name);
+        if (!found) {
+            fprintf(stderr, "No element named `%s` found", top_name);
+            if (prev_path && prev_path != top_name) fprintf(stderr, " in `%s`", prev_path);
+            fprintf(stderr, "\n");
             goto DEFER;
         }
     } 
