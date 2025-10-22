@@ -40,29 +40,17 @@ void print_archive(Archive *arc, ElementInfo* root, int tabs) {
 int main() {
     Archive arc = {0};
 
-    // if (!archive_new(&arc, "arschive.s7k")) {
-    //     return 1;
-    // }
-    if (!archive_load(&arc, "arschive.s7k")) {
+    if (!archive_new(&arc, "arschive.s7k")) {
         return 1;
     }
+    // if (!archive_load(&arc, "arschive.s7k")) {
+    //     return 1;
+    // }
     print_archive(&arc, NULL, 0);
     
 
-    ElementInfo *file = archive_get(&arc, "src/File.c");
-    if (file) {
-        ElementAttributes attr = {0};
-        ElementInfo *newfile = element_new_file_from_fs("file.c", attr, "./Makefile");
-
-        element_swap_content(file, newfile);
-        
-        if (strcmp(file->name, "Makefile") != 0) {
-            free(file->name);
-            file->name = strdup("Makefile");
-        }
-
-        free_element(newfile);
-    }
+    ElementInfo *elem = element_from_fs("./build", true);
+    archive_add(&arc, NULL, elem);
     
     printf("----------------\n");
     print_archive(&arc, NULL, 0);

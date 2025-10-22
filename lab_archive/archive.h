@@ -12,12 +12,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <fcntl.h>
 
 #include <error.h>
 #include <errno.h>
 
 #include "version.h"
+
+#define MODE_RW_USR (S_IRUSR | S_IWUSR)
+#define MODE_RW_GRP (S_IRGRP | S_IWGRP)
+#define MODE_RW_OTH (S_IROTH | S_IWOTH)
 
 struct Archive;
 typedef struct Archive Archive;
@@ -96,8 +101,6 @@ typedef enum {
 
 struct ElementAttributes {
     mode_t st_mode;
-    uid_t  st_uid; // NOTE: needed??? no sense to save file with that thing
-    gid_t  st_gid; // NOTE: needed??? no sense to save file with that thing
 };
 
 union ElementContent {
@@ -143,6 +146,8 @@ ElementInfo *element_new_file_from_fs(const char* name, ElementAttributes attrib
 // does copy memory
 ElementInfo *element_new_file_from_memory(const char* name, ElementAttributes attributes, void* ptr, uint64_t size);
 
+ElementInfo *element_from_fs(const char* filepath, bool recursive);
+
 ElementInfo *element_add_child(ElementInfo *root, ElementInfo *new);
 bool element_swap_content(ElementInfo *old, ElementInfo *new);
 
@@ -156,6 +161,8 @@ void free_element_content(ElementInfo* elem);
 void free_element_list(ElementInfo* elem);
 
 int64_t write_fd_to_fd(int fdto, int fdfrom, int64_t offset_from, uint64_t size);
+
+char *concat_strings(const char* restrict str1, const char* restrict str2);
 
 ElementAttributes standart_attributes();
 

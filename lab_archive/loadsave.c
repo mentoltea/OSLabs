@@ -141,7 +141,7 @@ bool archive_save(Archive *arc) {
     temp_path[orig_length + 4] = '\0';
     
     int old_fd = -1;
-    old_fd = open(temp_path, O_RDWR | O_CREAT | O_TRUNC);
+    old_fd = open(temp_path, O_RDWR | O_CREAT | O_TRUNC, MODE_RW_USR | MODE_RW_GRP | MODE_RW_OTH);
     if (old_fd == -1) {
         fprintf(stderr, "Cannot open path %s : %s\n", temp_path, strerror(errno));
         goto DEFER;
@@ -179,7 +179,7 @@ DEFER:
 bool archive_save_as(Archive *arc, const char* arcpath) {
     int fd = -1;
     bool result = false;
-    fd = open(arcpath, O_WRONLY | O_CREAT | O_TRUNC);
+    fd = open(arcpath, O_WRONLY | O_CREAT | O_TRUNC, MODE_RW_USR | MODE_RW_GRP | MODE_RW_OTH);
     if (fd == -1) {
         fprintf(stderr, "Cannot open path %s : %s\n", arcpath, strerror(errno));
         return false;
@@ -290,7 +290,7 @@ bool load_element_list(int fd, Archive *arc, ElementInfo **dest, struct LoadCont
 bool archive_load(Archive *arc, const char* arcpath) {
     bool result = false;
     
-    int fd = open(arcpath, O_RDWR);
+    int fd = open(arcpath, O_RDWR, MODE_RW_USR | MODE_RW_GRP | MODE_RW_OTH);
     if (fd == -1) {
         fprintf(stderr, "Cannot open path %s : %s\n", arcpath, strerror(errno));
         return false;

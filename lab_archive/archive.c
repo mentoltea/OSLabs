@@ -327,7 +327,7 @@ void archive_flush(Archive *arc) {
 
 bool archive_new(Archive *arc, const char* arcpath) {
     arc->arcpath = strdup(arcpath);
-    arc->fd = open(arc->arcpath, O_RDWR | O_CREAT | O_EXCL);
+    arc->fd = open(arc->arcpath, O_RDWR | O_CREAT | O_EXCL, MODE_RW_USR | MODE_RW_GRP | MODE_RW_OTH);
     if (arc->fd == -1) {
         fprintf(stderr, "Cannot create new archive %s : %s\n", arcpath, strerror(errno));
         return false;
@@ -408,4 +408,94 @@ bool element_swap_content(ElementInfo *old, ElementInfo *new) {
     new->content = oldcontent;
     
     return true;
+}
+
+ElementInfo *element_from_fs(const char* filepath, bool recursive) {
+    ElementInfo *result = NULL;
+    ElementInfo *element = NULL;
+    DIR* dir = NULL;
+    char* buff = NULL;
+    struct stat info;
+    
+    if (stat(filepath, &info) != 0) {
+        fprintf(stderr, "Cannot stat `%s`: %s\n", filepath, strerror(errno));
+        goto DEFER;
+    } 
+    
+    element = calloc(1, sizeof(ElementInfo));
+    
+    if (S_ISDIR(info.st_mode)) {
+        element->type = ELEM_DIR;
+    } else if (S_ISREG(info.st_mode)) {
+        element->type = ELEM_FILE;
+    } else {
+        fprintf(stderr, "`%s` is not a file nor a directory\n", filepath);
+        goto DEFER;   
+    }
+    element->attributes.st_mode = info.st_mode;
+    
+    buff = strdup(filepath);
+    size_t length = strlen(buff);
+    while (length > 0 && buff[length-1]=='/') {
+        length--;
+        buff[length] = '\0';
+    }
+    
+    if (length == 0) {
+        fprintf(stderr, "Invalid filepath: %s\n", filepath);
+        goto DEFER;       
+    }
+    
+    char *ptr = buff;
+    char *chr = NULL;
+    while ( (chr=strchr(ptr, '/')) != NULL ) {
+        ptr = ++chr;
+    }
+    element->name = strdup(ptr);
+    
+    if (element->type == ELEM_FILE) {
+        element->content.file.source = SOURCE_DRIVE;
+        element->content.file.descriptor.drive.filepath = strdup(filepath);
+    } else if (recursive) {
+        dir = opendir(filepath);
+        if (!dir) {
+            fprintf(stderr, "%s\n", strerror(errno));
+            goto DEFER;
+        }
+        struct dirent *entry;
+        ElementInfo *entryinfo;
+        char* full_path = NULL;
+
+        size_t filepath_length = strlen(filepath);
+        bool no_slash = !(filepath[filepath_length-1] == '/');
+        for (entry = readdir(dir); entry != NULL; entry = readdir(dir)) {
+            size_t entryname_length = strlen(entry->d_name);
+
+            if (entryname_length == 0) continue;
+            if (entryname_length == 1 && entry->d_name[0]=='.') continue;
+            if (entryname_length == 2 && entry->d_name[0]=='.' && entry->d_name[1]=='.') continue;
+            
+            full_path = malloc(filepath_length + entryname_length + no_slash + 1);
+            memcpy(full_path, filepath, filepath_length);
+            if (no_slash) full_path[filepath_length] = '/';
+            memcpy(full_path + filepath_length + no_slash, entry->d_name, entryname_length);
+            full_path[filepath_length + no_slash + entryname_length] = '\0';
+            
+            entryinfo = element_from_fs(full_path, recursive);
+            if (entryinfo) {
+                element_add_child(element, entryinfo);
+            }
+
+            free(full_path);
+        }
+    }
+    
+    result = element;
+DEFER:
+    if (dir) closedir(dir);
+    if (buff) free(buff);
+    if (!result) {
+        if (element) free_element(element);
+    }
+    return result;
 }
