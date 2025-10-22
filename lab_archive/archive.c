@@ -296,6 +296,7 @@ bool archive_add(Archive *arc, ElementInfo *root, ElementInfo *new) {
     
     if (root) root->content.dir.children_count++;
     arc->element_count++;
+    if (new->type == ELEM_DIR) arc->element_count += new->content.dir.children_count;
     arc->was_changed = true;
     
     return true;
@@ -497,5 +498,74 @@ DEFER:
     if (!result) {
         if (element) free_element(element);
     }
+    return result;
+}
+
+bool archive_element_to_fs(Archive *arc, const char* dir, ElementInfo* element, bool recursive) {
+    bool result = false;
+    int fd = 0;
+    char *filepath = NULL;
+    char *buff = NULL;
+
+    struct stat dirinfo;
+    if (stat(dir, &dirinfo) != 0) {
+        fprintf(stderr, "Cannot stat `%s`: %s\n", dir, strerror(errno));
+        goto DEFER;
+    }
+    
+    if (!S_ISDIR(dirinfo.st_mode)) {
+        fprintf(stderr, "`%s` is not a dir\n", dir);
+        goto DEFER;
+    }
+
+    size_t dir_length = strlen(dir);
+    bool no_slash = dir[dir_length-1]!='/';
+
+    buff = malloc(dir_length + 1 + no_slash);
+    memcpy(buff, dir, dir_length);
+    if (no_slash) buff[dir_length] = '/';
+    buff[dir_length + no_slash] = '\0';
+    
+    filepath = concat_strings(buff, element->name);
+    
+    if (element->type == ELEM_FILE) {
+        fd = open(filepath, O_WRONLY | O_EXCL | O_CREAT | O_TRUNC, element->attributes.st_mode);
+        
+        if (fd == -1) {
+            fprintf(stderr, "Cannot open file `%s`: %s\n", filepath, strerror(errno));
+            goto DEFER;
+        }
+
+        if (element_write_content_to_fd(fd, arc, element) == -1) {
+            goto DEFER;
+        }
+    } else {
+        if (mkdir(filepath, element->attributes.st_mode) != 0) {
+            fprintf(stderr, "Cannot create directory `%s`: %s\n", filepath, strerror(errno));
+            goto DEFER;
+        }
+        if (recursive) {
+            ElementInfo *ptr = NULL;
+            for (ptr = element->content.dir.child; ptr != NULL; ptr = ptr->next) {
+                archive_element_to_fs(arc, filepath, ptr, recursive);
+            }
+        }
+    }
+
+    result = true;
+DEFER:
+    if (buff) free(buff);
+    if (filepath) free(filepath);
+    if (fd && fd != -1) close(fd);
+    return result;
+}
+
+char *concat_strings(const char* restrict str1, const char* restrict str2) {
+    size_t size1 = strlen(str1);
+    size_t size2 = strlen(str2);
+    char* result = malloc(size1 + size2 + 1);
+    memcpy(result, str1, size1);
+    memcpy(result + size1, str2, size2);
+    result[size1 + size2] = '\0';
     return result;
 }

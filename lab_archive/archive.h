@@ -129,6 +129,7 @@ bool archive_replace(Archive *arc, ElementInfo *old, ElementInfo *new);
 void archive_delete(Archive *arc, const char *archive_path);
 void archive_delete_element(Archive *arc, ElementInfo *elem);
 ElementInfo *archive_get(Archive *arc, const char *archive_path);
+bool archive_element_to_fs(Archive *arc, const char* dir, ElementInfo* element, bool recursive);
 
 bool archive_load(Archive *arc, const char* arcpath);
 void archive_flush(Archive *arc);
@@ -147,6 +148,7 @@ ElementInfo *element_new_file_from_fs(const char* name, ElementAttributes attrib
 ElementInfo *element_new_file_from_memory(const char* name, ElementAttributes attributes, void* ptr, uint64_t size);
 
 ElementInfo *element_from_fs(const char* filepath, bool recursive);
+
 
 ElementInfo *element_add_child(ElementInfo *root, ElementInfo *new);
 bool element_swap_content(ElementInfo *old, ElementInfo *new);

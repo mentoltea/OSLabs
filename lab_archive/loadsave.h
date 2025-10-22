@@ -18,7 +18,7 @@ struct ElementHeader {
     int64_t next_offset; // -1 if no next
     int64_t content_offset;
     uint64_t content_size;
-    char name[PATH_MAX];    
+    uint64_t name_length;    
 };
 
 bool write_and_check(int fd, const void *buf, size_t count);

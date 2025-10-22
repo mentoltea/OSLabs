@@ -57,22 +57,17 @@ bool save_element(int fd, Archive *arc, ElementInfo *elem, bool modify_archive) 
     head.content_offset = 0;
     head.content_size = element_get_save_size(elem) - sizeof(struct ElementHeader);
     head.next_offset = elem->next ? (int64_t) head.content_size : (int64_t) -1;
-    if (strlen(elem->name) >= PATH_MAX) {
-        fprintf(stderr, "Element name cannot exceed %d symbols\n", PATH_MAX-1);
+    head.name_length = strlen(elem->name); 
+    if (head.name_length == 0) {
+        fprintf(stderr, "Cannot save element with empty name\n");
         goto DEFER;
     }
-    strcpy(head.name, elem->name);
 
     int64_t header_offset = lseek(fd, 0, SEEK_CUR);
     
     // element header
     if (!write_and_check(fd, &head, sizeof(head))) goto DEFER;
-    // if (!write_and_check(fd, &head.type, sizeof(head.type)))                        goto DEFER;
-    // if (!write_and_check(fd, &head.attr, sizeof(head.attr)))                        goto DEFER;
-    // if (!write_and_check(fd, &head.next_offset, sizeof(head.next_offset)))          goto DEFER;
-    // if (!write_and_check(fd, &head.content_offset, sizeof(head.content_offset)))    goto DEFER;
-    // if (!write_and_check(fd, &head.content_size, sizeof(head.content_size)))        goto DEFER;
-    // if (!write_and_check(fd, name, sizeof(name)))                                   goto DEFER;
+    if (!write_and_check(fd, elem->name, head.name_length)) goto DEFER;
     
     int64_t content_offset = lseek(fd, 0, SEEK_CUR);
 
@@ -217,10 +212,15 @@ DEFER:
 bool load_element(int fd, Archive *arc, ElementInfo **dest, struct LoadContext *ctx) {
     bool result = false;
     ElementInfo *element = NULL;
+    char *name_buff = NULL;
     struct ElementHeader header;
 
     int64_t header_offset = ctx->offset;
     if (!read_and_check(fd, &header, sizeof(header))) goto DEFER;
+    name_buff = malloc(header.name_length + 1);
+    if (!read_and_check(fd, name_buff, header.name_length)) goto DEFER;
+    name_buff[header.name_length] = '\0';
+    
     ctx->offset = lseek(fd, 0, SEEK_CUR);
     
     element = calloc(1, sizeof(ElementInfo));
@@ -235,7 +235,7 @@ bool load_element(int fd, Archive *arc, ElementInfo **dest, struct LoadContext *
             goto DEFER;
         } break;
     }
-    element->name = strdup(header.name);
+    element->name = strdup(name_buff);
     element->attributes = header.attr;
 
 
@@ -251,6 +251,7 @@ bool load_element(int fd, Archive *arc, ElementInfo **dest, struct LoadContext *
             if ( (ctx->offset = lseek_and_check(fd, header.content_offset, SEEK_CUR)) == -1) goto DEFER;
             ctx->parent = element;
             ctx->prev = NULL;
+            ctx->next_offset = 0;
             
             if (!load_element_list(fd, arc, &element->content.dir.child, ctx)) goto DEFER;
             
@@ -262,6 +263,7 @@ bool load_element(int fd, Archive *arc, ElementInfo **dest, struct LoadContext *
         ctx->parent->content.dir.children_count++;
     }
     element->prev = ctx->prev;
+    if (ctx->prev) ctx->prev->next = element;
     ctx->prev = element;
 
     
@@ -269,6 +271,7 @@ bool load_element(int fd, Archive *arc, ElementInfo **dest, struct LoadContext *
     ctx->next_offset = header.next_offset;
     result = true;
 DEFER:
+    if (name_buff) free(name_buff);
     if (!result) {
         if (element) {
             free_element(element);
@@ -282,7 +285,7 @@ bool load_element_list(int fd, Archive *arc, ElementInfo **dest, struct LoadCont
     while (ctx->next_offset != -1) {
         ctx->offset = lseek(fd, ctx->next_offset, SEEK_CUR);
         if (!load_element(fd, arc, ptr, ctx)) return false;
-        ptr = &(*dest)->next;    
+        ptr = &(*ptr)->next;    
     }
     return true;
 }

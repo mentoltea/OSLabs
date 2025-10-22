@@ -40,21 +40,27 @@ void print_archive(Archive *arc, ElementInfo* root, int tabs) {
 int main() {
     Archive arc = {0};
 
-    if (!archive_new(&arc, "arschive.s7k")) {
-        return 1;
-    }
-    // if (!archive_load(&arc, "arschive.s7k")) {
+    // if (!archive_new(&arc, "arschive.s7k")) {
     //     return 1;
     // }
+    if (!archive_load(&arc, "arschive.s7k")) {
+        return 1;
+    }
     print_archive(&arc, NULL, 0);
     
 
-    ElementInfo *elem = element_from_fs("./build", true);
-    archive_add(&arc, NULL, elem);
+    // ElementInfo *elem = element_from_fs("./build", true);
+    // archive_add(&arc, NULL, elem);
+    // return 0;
     
+    ElementInfo *elem = archive_get(&arc, "build");
+    if (elem) {
+        archive_element_to_fs(&arc, "./build", elem, true);
+    }
+
     printf("----------------\n");
-    print_archive(&arc, NULL, 0);
     archive_save(&arc);
+    print_archive(&arc, NULL, 0);
     archive_free(&arc);
     return 0;
 }
