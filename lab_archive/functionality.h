@@ -3,13 +3,16 @@
 
 #include "archive.h"
 
-bool func_add_file_to_archive(Archive *arc, const char* filepath, int flags);
-bool func_add_dir_to_archive(Archive *arc, const char* filepath, int flags);
+bool func_new_archive(const char* filepath);
 
-bool func_delete_element_from_archive(Archive *arc, const char* filepath, int flags);
+bool func_add_to_archive(Archive *arc, const char* arcpath, const char* filepath, bool recursive);
 
-bool func_print_archive_info(Archive *arc, int flags);
+bool func_extract_from_archive(Archive *arc, const char* arcpath, const char* extract_to, bool recursive);
 
-bool func_print_archive_help(Archive *arc, const char* filepath, int flags);
+bool func_delete_from_archive(Archive *arc, const char* arcpath);
+
+void func_print_archive_info(Archive *arc);
+
+void func_print_archive_help();
 
 #endif // FUNCTIONALITY_H

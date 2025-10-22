@@ -6,8 +6,8 @@ BUILD_FOLDER = build
 
 all: archiver
 
-archiver: $(BUILD_FOLDER)/cli.o $(BUILD_FOLDER)/loadsave.o $(BUILD_FOLDER)/archive.o
-	$(CC) $(CFLAGS) -o archiver $(BUILD_FOLDER)/cli.o $(BUILD_FOLDER)/loadsave.o $(BUILD_FOLDER)/archive.o
+archiver: $(BUILD_FOLDER)/cli.o $(BUILD_FOLDER)/loadsave.o $(BUILD_FOLDER)/archive.o $(BUILD_FOLDER)/functionality.o
+	$(CC) $(CFLAGS) -o archiver $(BUILD_FOLDER)/cli.o $(BUILD_FOLDER)/loadsave.o $(BUILD_FOLDER)/archive.o $(BUILD_FOLDER)/functionality.o
 
 $(BUILD_FOLDER):
 	mkdir -p $(BUILD_FOLDER)
@@ -21,6 +21,8 @@ $(BUILD_FOLDER)/archive.o: archive.c $(BUILD_FOLDER)
 $(BUILD_FOLDER)/loadsave.o: loadsave.c $(BUILD_FOLDER)
 	$(CC) $(CFLAGS) -c loadsave.c -o $(BUILD_FOLDER)/loadsave.o
 
+$(BUILD_FOLDER)/functionality.o: functionality.c $(BUILD_FOLDER)
+	$(CC) $(CFLAGS) -c functionality.c -o $(BUILD_FOLDER)/functionality.o
 
 clean:
 	rm -rf $(BUILD_FOLDER) archiver

@@ -136,6 +136,7 @@ void archive_flush(Archive *arc);
 bool archive_save(Archive *arc);
 bool archive_save_as(Archive *arc, const char* arcpath);
 
+uint64_t element_get_child_count(ElementInfo *elem);
 uint64_t element_get_content_size(ElementInfo *elem);
 // makes sense only for files
 // returns number of bytes written

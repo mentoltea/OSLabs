@@ -65,6 +65,15 @@ void archive_free(Archive *arc) {
     }
 }
 
+uint64_t element_get_child_count(ElementInfo *elem) {
+    if (elem->type == ELEM_FILE) return 0;
+    uint64_t sum = 0;
+    for (ElementInfo *ptr = elem->content.dir.child; ptr != NULL; ptr = ptr->next) {
+        sum = sum + 1 + element_get_child_count(ptr);
+    }
+    return sum;
+}
+
 uint64_t element_get_content_size(ElementInfo *elem) {
     uint64_t size = 0;
     if (elem->type == ELEM_FILE) {
@@ -185,10 +194,6 @@ ElementInfo *archive_get(Archive *arc, const char *archive_path) {
     while (path[length-1] == '/') {
         path[length-1] = '\0';
         length--;
-        if (length == 0) {
-            fprintf(stderr, "Cannot resolve path %s\n", archive_path);
-            goto DEFER;
-        }
     }
     
     char* cur_path = path;
@@ -260,7 +265,7 @@ void archive_delete(Archive *arc, const char *archive_path) {
     if (arc->element == element) {
         arc->element = next;
     }
-    arc->element_count--;
+    arc->element_count -= (1 + element_get_child_count(element));
     arc->was_changed = true;
 
     free_element(element);
@@ -295,8 +300,7 @@ bool archive_add(Archive *arc, ElementInfo *root, ElementInfo *new) {
     *ptr = new;
     
     if (root) root->content.dir.children_count++;
-    arc->element_count++;
-    if (new->type == ELEM_DIR) arc->element_count += new->content.dir.children_count;
+    arc->element_count += 1 + element_get_child_count(new);
     arc->was_changed = true;
     
     return true;

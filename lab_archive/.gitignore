@@ -6,5 +6,6 @@
 !archive.h
 !cli.c
 !functionality.h
+!functionality.c
 !loadsave.h
 !loadsave.c
