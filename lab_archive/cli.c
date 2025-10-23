@@ -10,6 +10,7 @@ enum Target {
     T_NONE,
     HELP,
     STAT,
+    LOAD,
     NEW,
     ADD,
     EXTRACT,
@@ -53,12 +54,26 @@ bool apply(enum Flags flags, enum Target target, char * arguments[ARG_MAX]) {
     switch (target) {
         case NONE: {
             if (argc != 0) {
-                if (!expect_arg_count("Archive open", 1, argc)) return false;
-                arcpath = arguments[0];
-                if (!archive_load(&archive, arcpath)) {
-                    fprintf(stderr, "Cannot load archive `%s`\n", arcpath);
-                    return false;                
+                see_help();
+                return false;
+            }
+        } break;
+
+        case LOAD: {
+            if (!expect_arg_count("Archive open", 1, argc)) return false;
+            
+            if (archive.arcpath) {
+                if (!archive_save(&archive)) {
+                    fprintf(stderr, "Error saving archive `%s`\n", archive.arcpath);
+                    return false;    
                 }
+                archive_free(&archive);
+            }
+
+            arcpath = arguments[0];
+            if (!archive_load(&archive, arcpath)) {
+                fprintf(stderr, "Cannot load archive `%s`\n", arcpath);
+                return false;                
             }
         } break;
 
@@ -141,6 +156,7 @@ int get_target(char* arg) {
     switch (arg[1]) {
         case 'h': return HELP;
         case 's': return STAT;
+        case 'i': return LOAD;
         case 'n': return NEW; 
         case 'a': return ADD;
         case 'e': return EXTRACT;
