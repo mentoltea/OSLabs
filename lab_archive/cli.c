@@ -60,20 +60,33 @@ bool apply(enum Flags flags, enum Target target, char * arguments[ARG_MAX]) {
         } break;
 
         case LOAD: {
-            if (!expect_arg_count("Archive open", 1, argc)) return false;
-            
-            if (archive.arcpath) {
-                if (!archive_save(&archive)) {
-                    fprintf(stderr, "Error saving archive `%s`\n", archive.arcpath);
-                    return false;    
-                }
-                archive_free(&archive);
-            }
+            if (argc != 0) {
 
-            arcpath = arguments[0];
-            if (!archive_load(&archive, arcpath)) {
-                fprintf(stderr, "Cannot load archive `%s`\n", arcpath);
-                return false;                
+                if (!expect_arg_count("load", 1, argc)) return false;
+                
+                if (archive.arcpath) {
+                    if (!archive_save(&archive)) {
+                        fprintf(stderr, "Error saving archive `%s`\n", archive.arcpath);
+                        return false;    
+                    }
+                    archive_free(&archive);
+                }
+                
+                arcpath = arguments[0];
+                
+                struct stat info;
+                if (stat(arcpath, &info) != 0) {
+                    // no such file
+                    if (!archive_new(&archive, arcpath)) {
+                        fprintf(stderr, "Cannot create archive `%s`\n", arcpath);
+                        return false;
+                    }
+                } else {
+                    if (!archive_load(&archive, arcpath)) {
+                        fprintf(stderr, "Cannot load archive `%s`\n", arcpath);
+                        return false;                
+                    }
+                }
             }
         } break;
 
@@ -125,14 +138,22 @@ bool apply(enum Flags flags, enum Target target, char * arguments[ARG_MAX]) {
         } break;
         
         case EXTRACT: {
-            if (!expect_arg_count("extract", 2, argc)) return false;
+            if (argc != 1 && argc != 2) {
+                fprintf(stderr, "extract: expected 1 or 2 arguments (got %d)\n", argc);
+                see_help();
+                return false;
+            }
+
             if (archive.arcpath == NULL) {
                 fprintf(stderr, "extract: needs an archive opened\n");
                 see_help();
                 return false;
             }
+
             char *arg1 = arguments[0];
             char *arg2 = arguments[1];
+            if (arg2 == NULL) arg2 = "./";
+            
             if (!func_extract_from_archive(&archive, arg1, arg2, flags&RECURSIVE)) return false;
         } break;
 
@@ -156,9 +177,8 @@ int get_target(char* arg) {
     switch (arg[1]) {
         case 'h': return HELP;
         case 's': return STAT;
-        case 'i': return LOAD;
         case 'n': return NEW; 
-        case 'a': return ADD;
+        case 'a': case 'i': return ADD;
         case 'e': return EXTRACT;
         case 'd': return DELETE;
     }
@@ -179,9 +199,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    enum Flags default_flags = NONE;
+    enum Flags default_flags = RECURSIVE;
     enum Flags flags = NONE;
-    enum Target target = T_NONE;
+    enum Target target = LOAD;
     char * arguments[ARG_MAX] = {0};
     
     int current_arg = 0;

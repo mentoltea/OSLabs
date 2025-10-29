@@ -55,9 +55,9 @@ bool save_element(int fd, Archive *arc, ElementInfo *elem, bool modify_archive) 
     head.type = elem->type;
     head.attr = elem->attributes;
     head.content_offset = 0;
-    head.content_size = element_get_save_size(elem) - sizeof(struct ElementHeader);
-    head.next_offset = elem->next ? (int64_t) head.content_size : (int64_t) -1;
     head.name_length = strlen(elem->name); 
+    head.content_size = element_get_save_size(elem) - sizeof(struct ElementHeader) - head.name_length;
+    head.next_offset = elem->next ? (int64_t) head.content_size : (int64_t) -1;
     if (head.name_length == 0) {
         fprintf(stderr, "Cannot save element with empty name\n");
         goto DEFER;
@@ -256,6 +256,8 @@ bool load_element(int fd, Archive *arc, ElementInfo **dest, struct LoadContext *
             if (!load_element_list(fd, arc, &element->content.dir.child, ctx)) goto DEFER;
             
             *ctx = old_ctx;
+
+            ctx->offset = lseek(fd, ctx->offset, SEEK_SET);
         }
     }
 
@@ -322,7 +324,7 @@ bool archive_load(Archive *arc, const char* arcpath) {
     }
     
     ctx.offset = lseek(fd, 0, SEEK_CUR);
-    ctx.offset = lseek(fd, header.element_offset, SEEK_CUR);
+    // ctx.offset = lseek(fd, header.element_offset, SEEK_CUR);
     ctx.next_offset = header.element_offset;
 
     if (!load_element_list(fd, arc, &arc->element, &ctx)) goto DEFER;
@@ -338,7 +340,7 @@ DEFER:
 }
 
 uint64_t element_get_save_size(ElementInfo *elem) {
-    uint64_t size = sizeof(struct ElementHeader);
+    uint64_t size = sizeof(struct ElementHeader) + strlen(elem->name);
     if (elem->type == ELEM_FILE) {
         size += element_get_content_size(elem);
     } else {

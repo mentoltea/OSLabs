@@ -121,11 +121,15 @@ void func_print_archive_help() {
     printf("                    Creates a new archive with given filepath\n");
     printf("            -a  [FILEPATH]\n");
     printf("            -a  [ARCPATH] [FILEPATH]\n");
+    printf("            -i  [FILEPATH]\n");
+    printf("            -i  [ARCPATH] [FILEPATH]\n");
     printf("                    Adds filepath to archive at arcpath\n");
     printf("                    If arcpath is skipped, adds to the root of the archive\n");
     printf("                    When combined with -r flag, recursively adds all children (for directories)\n");
+    printf("            -e [ARCPATH]\n");
     printf("            -e [ARCPATH] [OUTPATH]\n");
     printf("                    Extracts element from arcpath to folder outpath\n");
+    printf("                    If outpath is missing, elements are extracted to current directory\n");
     printf("                    When combined with -r flag, recursively extracts all children (for directories)\n");
     printf("            -d [ARCPATH]\n");
     printf("                    Deletes element from archive\n");
