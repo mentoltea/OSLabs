@@ -1,0 +1,6 @@
+*
+!.gitignore
+!Makefile
+!fifo_read.c
+!fifo_write.c
+!pipe.c
