@@ -70,7 +70,7 @@ int main() {
         time_t current_time = time(0);
         char* timestr = ctime(&current_time);
         printf("Real current time: %s\n", timestr);
-        
+        close(pipefd[READ_END]);
         return 0;
     }
 
@@ -93,6 +93,7 @@ int main() {
 
     int wstatus;
     waitpid(pid, &wstatus, 0);
+    close(pipefd[WRITE_END]);
 
     return 0;
 }

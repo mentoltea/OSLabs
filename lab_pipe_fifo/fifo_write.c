@@ -54,5 +54,7 @@ int main() {
     }
     printf("\n");
 
+    close(fifo_fd);
+
     return 0;
 }

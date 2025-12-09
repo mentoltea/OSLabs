@@ -22,5 +22,7 @@ int main() {
     char* timestr = ctime(&current_time);
     printf("Process's pid is %d. Current time is %s", getpid(), timestr);
 
+    close(fifo_fd);
+
     return 0;
 }
