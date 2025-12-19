@@ -8,7 +8,7 @@ int semid = 0;
 
 void free_at_exit(int sig) {
     (void)sig;
-    // if (shmaddr) shmdt(shmaddr); 
+    if (shmaddr && shmaddr!=(void*)-1) shmdt(shmaddr); 
     if (shmid)  shmctl(shmid, IPC_RMID, NULL);
     if (semid)  semctl(semid, 0, IPC_RMID);
     unlink(SHMNAME);
@@ -30,19 +30,19 @@ int main() {
     signal(SIGTERM, free_at_exit);
     signal(SIGINT, free_at_exit);
 
-    int shmfd = open(SHMNAME, O_CREAT | O_EXCL | O_WRONLY);
+    int shmfd = open(SHMNAME, O_CREAT | O_EXCL | O_WRONLY, 0666);
     if (shmfd == -1) {
         fprintf(stderr, "Cannot create %s: %s\n", SHMNAME, strerror(errno));
         return 1;
     }
     close(shmfd);
 
-    int semmfd = open(SEMNAME, O_CREAT | O_EXCL | O_RDWR);
-    if (semmfd == -1) {
+    int semfd = open(SEMNAME, O_CREAT | O_EXCL | O_RDWR, 0666);
+    if (semfd == -1) {
         fprintf(stderr, "Cannot create %s: %s\n", SEMNAME, strerror(errno));
         return 1;
     }
-    close(semmfd);
+    close(semfd);
 
     if ((shmkey = ftok(SHMNAME, FTOK_ID)) == (key_t) -1) {
         fprintf(stderr, "Cannot get key %s: %s\n", SHMNAME, strerror(errno));
@@ -88,7 +88,7 @@ int main() {
         // sem_post
         sem_unlock(semid);
 
-        sleep(2);
+        sleep(3);
     }
     
     return 0;

@@ -40,9 +40,9 @@ void print_array() {
 
 void *writer(void* arg) {
     (void)arg;
-    for (int i=0; ;i++) {
+    for (int i=1; ;i++) {
         write_to_array(i);    
-        usleep(20*1000);
+        sleep(1);
     }
     return NULL;
 }
@@ -51,13 +51,14 @@ void *reader(void* arg) {
     (void)arg;
     for (; ;) {
         print_array();    
-        usleep(20*1000);
+        // sleep(1);
+        usleep(500 * 1000);
     }
     return NULL;
 }
 
 int main() {
-    if (sem_init(&sem, 0, 0) == -1) {
+    if (sem_init(&sem, 0, 1) == -1) {
         fprintf(stderr, "Unable to open semaphore: %s\n", strerror(errno));
         return 1;
     }
@@ -69,7 +70,6 @@ int main() {
     pthread_create(&reader_thread, NULL, reader, NULL);
     pthread_create(&writer_thread, NULL, writer, NULL);
 
-    sem_post(&sem);
 
     pthread_join(writer_thread, NULL);
     pthread_join(reader_thread, NULL);
