@@ -3,4 +3,4 @@ CFLAGS = -Wall -Wextra
 all: main
 
 main: main.c
-	gcc $(CFLAGS) main.c -o main
+	gcc $(CFLAGS) main.c -o main -lpthread
